@@ -12,10 +12,9 @@ from aiogram.types import (
     Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton,
     LinkPreviewOptions
 )
-from aiogram.exceptions import TelegramBadRequest # Добавлен импорт для обработки ошибок
 
-# Токен вашего бота (заменен на ваш новый)
-BOT_TOKEN = "8852237085:AAGWl1SPhs8E1R1yGcnwJC8xApuPW21nNRs"
+# Токен вашего бота
+BOT_TOKEN = "8907917121:AAH-ceWW-nbtLy6vIn9yqp5sNogxCIis7r0"
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
@@ -436,11 +435,10 @@ async def execute_ar_command(message: Message, is_business: bool = False):
             reply_markup=get_step1_kb(),
         )
     except Exception as e:
-        # ИСПРАВЛЕНИЕ: Если это PEER_FLOOD, молча выходим, не пугая пользователя
+        # ИСПРАВЛЕНИЕ: Проверяем на PEER_FLOOD, чтобы не засорять чат ошибками
         if "PEER_FLOOD" in str(e):
-            print(f"[PEER_FLOOD] Бот ограничен в чате {message.chat.id}. Отправка отменена.")
+            print(f"[PEER_FLOOD] Бот ограничен в чате {message.chat.id}. Отправка карточки отменена.")
         else:
-            # Если другая ошибка, пытаемся уведомить (но защищаем от повторного падения)
             try:
                 await message.answer(f"⚠️ Ошибка отправки карточки: {e}")
             except Exception:
@@ -469,6 +467,7 @@ async def execute_ar_command(message: Message, is_business: bool = False):
                 f"4. Включите галочку <b>«Удаление сообщений»</b> (Delete messages).\n"
                 f"5. Перезапустите бота."
             )
+            # ИСПРАВЛЕНИЕ: Защита от падения при отправке ошибки удаления
             try:
                 await bot.send_message(
                     chat_id=message.chat.id,
