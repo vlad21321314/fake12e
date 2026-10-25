@@ -13,10 +13,13 @@ from aiogram.types import (
     LinkPreviewOptions
 )
 
-# Укажи новый токен в переменной окружения BOT_TOKEN на BotHost.
-BOT_TOKEN = os.getenv("8642779036:AAEwpCQ-i26_YMX9mz_nuBZckL9TjWoqcug")
-if not BOT_TOKEN:
-    raise RuntimeError("Не задан BOT_TOKEN. Добавь его в переменные окружения BotHost.")
+# Токен вашего бота
+BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+if not BOT_TOKEN or BOT_TOKEN == "PASTE_NEW_TOKEN_HERE":
+    raise RuntimeError(
+        "Укажи новый токен: замени PASTE_NEW_TOKEN_HERE в bot.py "
+        "или добавь BOT_TOKEN в переменные окружения хостинга."
+    )
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
@@ -503,7 +506,7 @@ async def process_step2(callback: CallbackQuery):
 @dp.callback_query(F.data == "explain_continue_btn")
 async def explain_continue_trap(callback: CallbackQuery):
     await callback.answer(
-        text="Бот не может автоматически подтвердить передачу NFT. Проверяйте статус сделки в Telegram вручную.",
+        text="Бот не проверяет передачу NFT автоматически. Проверьте статус сделки вручную в Telegram.",
         show_alert=True,
     )
 
