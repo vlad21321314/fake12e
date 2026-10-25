@@ -30,6 +30,7 @@ from aiogram.types import (
 
 # Set BOT_TOKEN in your environment. Do not paste bot tokens into source code.
 BOT_TOKEN = os.getenv("8642779036:AAEwpCQ-i26_YMX9mz_nuBZckL9TjWoqcug")
+
 if not BOT_TOKEN:
     raise RuntimeError(
         "BOT_TOKEN is not set. Create a new token with @BotFather and set "
