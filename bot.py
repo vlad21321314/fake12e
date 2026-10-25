@@ -25,7 +25,7 @@ from aiogram.types import (
 # pip install -U aiogram aiohttp beautifulsoup4
 #
 # Set BOT_TOKEN as an environment variable. Never put the token in this file.
-BOT_TOKEN = os.getenv("8642779036:AAEwpCQ-i26_YMX9mz_nuBZckL9TjWoqcug", "").strip()
+BOT_TOKEN = os.getenv("", "").strip()
 if not BOT_TOKEN:
     raise RuntimeError(
         "Не задан BOT_TOKEN. Добавьте новый токен в переменные окружения."
