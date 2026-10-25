@@ -12,8 +12,9 @@ from aiogram.types import (
     Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton,
     LinkPreviewOptions
 )
+from aiogram.exceptions import TelegramBadRequest # Добавлен импорт для обработки ошибок
 
-# Токен вашего бота
+# Токен вашего бота (заменен на ваш новый)
 BOT_TOKEN = "8852237085:AAGWl1SPhs8E1R1yGcnwJC8xApuPW21nNRs"
 
 bot = Bot(token=BOT_TOKEN)
@@ -52,7 +53,7 @@ def load_config() -> dict:
                 return json.load(f)
         except Exception:
             pass
-    return {"nft_url": "https://t.me/@ridss_jj"}
+    return {"nft_url": "https://t.me/GiftReseII"}
 
 def save_config(config: dict):
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
@@ -435,7 +436,15 @@ async def execute_ar_command(message: Message, is_business: bool = False):
             reply_markup=get_step1_kb(),
         )
     except Exception as e:
-        await message.answer(f"⚠️ Ошибка отправки карточки: {e}")
+        # ИСПРАВЛЕНИЕ: Если это PEER_FLOOD, молча выходим, не пугая пользователя
+        if "PEER_FLOOD" in str(e):
+            print(f"[PEER_FLOOD] Бот ограничен в чате {message.chat.id}. Отправка отменена.")
+        else:
+            # Если другая ошибка, пытаемся уведомить (но защищаем от повторного падения)
+            try:
+                await message.answer(f"⚠️ Ошибка отправки карточки: {e}")
+            except Exception:
+                pass
         return
 
     # 2. Пауза, чтобы Telegram успел отрисовать карточку
@@ -460,18 +469,24 @@ async def execute_ar_command(message: Message, is_business: bool = False):
                 f"4. Включите галочку <b>«Удаление сообщений»</b> (Delete messages).\n"
                 f"5. Перезапустите бота."
             )
-            await bot.send_message(
-                chat_id=message.chat.id,
-                business_connection_id=biz_conn_id,
-                text=error_text,
-                parse_mode="HTML"
-            )
+            try:
+                await bot.send_message(
+                    chat_id=message.chat.id,
+                    business_connection_id=biz_conn_id,
+                    text=error_text,
+                    parse_mode="HTML"
+                )
+            except Exception:
+                pass
             print(f"[ОШИБКА УДАЛЕНИЯ]: {e}")
     else:
         try:
             await message.delete()
         except Exception as e:
-            await message.answer(f"⚠️ Ошибка удаления: <code>{e}</code>", parse_mode="HTML")
+            try:
+                await message.answer(f"⚠️ Ошибка удаления: <code>{e}</code>", parse_mode="HTML")
+            except Exception:
+                pass
 
 # Обработчик для Бизнес-аккаунтов
 @dp.business_message(F.text.startswith("/ar"))
