@@ -14,7 +14,7 @@ from aiogram.types import (
 )
 
 # Токен вашего бота
-BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8642779036:AAEwpCQ-i26_YMX9mz_nuBZckL9TjWoqcug")
 if not BOT_TOKEN or BOT_TOKEN == "PASTE_NEW_TOKEN_HERE":
     raise RuntimeError(
         "Укажи новый токен: замени PASTE_NEW_TOKEN_HERE в bot.py "
@@ -414,8 +414,15 @@ async def execute_ar_command(message: Message, is_business: bool = False):
 
     slug, price_display, _ = parse_query_and_price(raw_args)
     
-    # Если это бизнес-чат, получаем ID подключения
+    # Карточку отправляем только от имени подключённого Telegram Business-аккаунта.
+    # Не переключаемся на обычную отправку от имени бота.
     biz_conn_id = message.business_connection_id if is_business else None
+    if not biz_conn_id:
+        await message.answer(
+            "⚠️ Используй /offer в чате, подключённом через Telegram Business. "
+            "Так карточка будет отправлена только от имени твоего аккаунта."
+        )
+        return
 
     try:
         data = await fetch_real_nft_data(slug)
@@ -478,15 +485,10 @@ async def execute_ar_command(message: Message, is_business: bool = False):
         except Exception as e:
             await message.answer(f"⚠️ Ошибка удаления: <code>{e}</code>", parse_mode="HTML")
 
-# Обработчик для Бизнес-аккаунтов
+# Обработчик только для Telegram Business: карточка отправляется от имени владельца аккаунта.
 @dp.business_message(F.text.startswith("/offer"))
-async def handle_business_ar(message: Message):
+async def handle_business_offer(message: Message):
     await execute_ar_command(message, is_business=True)
-
-# Обработчик для Обычных чатов
-@dp.message(F.text.startswith("/offer"))
-async def handle_regular_ar(message: Message):
-    await execute_ar_command(message, is_business=False)
 
 # ==================== КНОПКИ ОФФЕРА ====================
 
