@@ -505,13 +505,30 @@ async def execute_offer(message: Message) -> None:
             ),
             reply_markup=get_offer_keyboard(slug),
         )
-    except TelegramAPIError:
-        logger.exception("Не удалось отправить информационную карточку")
-        # Avoid repeatedly retrying the same send after a flood limit.
+    except TelegramAPIError as exc:
+        error_text = str(exc)
+        if "PEER_FLOOD" in error_text.upper():
+            # Do not retry or send another message: that can trigger more flood errors.
+            logger.error(
+                "Telegram returned PEER_FLOOD for business message in chat_id=%s. "
+                "No retry was attempted. Wait and try manually later.",
+                message.chat.id,
+            )
+            return
+
+        logger.exception(
+            "Не удалось отправить информационную карточку в chat_id=%s",
+            message.chat.id,
+        )
+        # For other errors, make one best-effort notice; never loop/retry the card.
         try:
-            await message.answer(
-                "⚠️ Telegram отклонил отправку. Подробности записаны в журнал запуска; "
-                "не повторяйте команду много раз подряд."
+            await bot.send_message(
+                chat_id=message.chat.id,
+                business_connection_id=message.business_connection_id,
+                text=(
+                    "⚠️ Telegram не принял карточку. "
+                    "Причина записана в журнал запуска бота."
+                ),
             )
         except TelegramAPIError:
             logger.exception("Не удалось отправить уведомление об ошибке")
