@@ -1,4 +1,210 @@
 import asyncio
+import html
+import logging
+import os
+import re
+
+from aiogram import Bot, Dispatcher, F
+from aiogram.exceptions import TelegramAPIError
+from aiogram.filters import Command
+from aiogram.types import (
+    Message,
+    CallbackQuery,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+    LinkPreviewOptions,
+)
+
+# Install: pip install -U aiogram
+# Set BOT_TOKEN as an environment variable before starting the bot.
+BOT_TOKEN = os.getenv("8642779036:AAEwpCQ-i26_YMX9mz_nuBZckL9TjWoqcug", "").strip()
+
+if not BOT_TOKEN:
+    raise RuntimeError(
+        "BOT_TOKEN is missing. Set it as an environment variable; "
+        "do not paste your bot token into a public file."
+    )
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+)
+logger = logging.getLogger("business_offer_bot")
+
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher()
+
+
+def parse_offer(text: str) -> tuple[str, str]:
+    """
+    Accepts:
+      /offer MirageLamp-44307 2727 stars
+      /offer https://t.me/nft/MirageLamp-44307 2.5 TON
+
+    This parser only formats an informational offer. It does not verify
+    ownership, price, escrow, or transfer of any NFT.
+    """
+    args = re.sub(r"^/offer(?:@\w+)?\s*", "", text or "", flags=re.I).strip()
+    if not args:
+        raise ValueError(
+            "Использование: /offer MirageLamp-44307 2727 stars\n"
+            "Или: /offer https://t.me/nft/MirageLamp-44307 2.5 TON"
+        )
+
+    # Split at the first price-like token, preserving URLs/slugs before it.
+    match = re.search(r"\s(?=\d+(?:[.,]\d+)?(?:\s|$))", args)
+    if match:
+        slug_or_url = args[:match.start()].strip()
+        price_text = args[match.start():].strip()
+    else:
+        parts = args.split(maxsplit=1)
+        slug_or_url = parts[0]
+        price_text = parts[1] if len(parts) > 1 else "Цена не указана"
+
+    slug_or_url = slug_or_url.strip()
+    if "t.me/nft/" in slug_or_url:
+        slug = slug_or_url.split("t.me/nft/", 1)[1].split("?", 1)[0].strip("/")
+    elif "fragment.com/gift/" in slug_or_url:
+        slug = slug_or_url.split("fragment.com/gift/", 1)[1].split("?", 1)[0].strip("/")
+    else:
+        slug = slug_or_url.lstrip("@").replace("#", "-")
+
+    if not slug or not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", slug):
+        raise ValueError("Не удалось распознать ссылку или название NFT.")
+
+    price_text = price_text.strip()
+    if not price_text:
+        price_text = "Цена не указана"
+
+    return slug, price_text
+
+
+def offer_keyboard(slug: str) -> InlineKeyboardMarkup:
+    # Callback data is kept short and contains no user-supplied arbitrary text.
+    safe_slug = re.sub(r"[^A-Za-z0-9_-]", "", slug)[:40] or "nft"
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Открыть NFT",
+                    url=f"https://t.me/nft/{slug}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Принять предложение",
+                    callback_data=f"offer_accept:{safe_slug}",
+                ),
+                InlineKeyboardButton(
+                    text="Отклонить",
+                    callback_data=f"offer_decline:{safe_slug}",
+                ),
+            ],
+        ]
+    )
+
+
+def make_offer_text(slug: str, price: str) -> str:
+    # Escape user-controlled text before inserting it into HTML.
+    safe_slug = html.escape(slug)
+    safe_price = html.escape(price)
+    nft_url = f"https://t.me/nft/{slug}"
+    return (
+        "🎁 <b>Предложение по NFT</b>\n\n"
+        f"NFT: <a href=\"{html.escape(nft_url, quote=True)}\">{safe_slug}</a>\n"
+        f"Указанная цена: <b>{safe_price}</b>\n\n"
+        "ℹ️ Это информационное предложение. Бот не подтверждает владение NFT, "
+        "не удерживает средства и не проверяет передачу цифрового актива. "
+        "Перед любыми действиями самостоятельно проверьте NFT, цену и условия сделки."
+    )
+
+
+@dp.business_message(F.text.startswith("/offer"))
+async def handle_business_offer(message: Message) -> None:
+    if not message.from_user:
+        return
+
+    # Business messages must carry the connection ID. Do not silently send
+    # a normal bot message as a fallback, since that changes the sender.
+    connection_id = message.business_connection_id
+    if not connection_id:
+        logger.warning("Received /offer without business_connection_id")
+        return
+
+    try:
+        slug, price = parse_offer(message.text or "")
+    except ValueError as exc:
+        await bot.send_message(
+            chat_id=message.chat.id,
+            business_connection_id=connection_id,
+            text=html.escape(str(exc)),
+        )
+        return
+
+    text = make_offer_text(slug, price)
+
+    try:
+        await bot.send_message(
+            chat_id=message.chat.id,
+            business_connection_id=connection_id,
+            text=text,
+            parse_mode="HTML",
+            link_preview_options=LinkPreviewOptions(
+                is_disabled=False,
+                prefer_large_media=True,
+                show_above_text=True,
+            ),
+            reply_markup=offer_keyboard(slug),
+        )
+    except TelegramAPIError:
+        logger.exception(
+            "Telegram rejected Business offer message (chat_id=%s, connection_id=%s)",
+            message.chat.id,
+            connection_id,
+        )
+        # Do not echo technical details or secrets to the chat.
+        try:
+            await bot.send_message(
+                chat_id=message.chat.id,
+                business_connection_id=connection_id,
+                text=(
+                    "Не удалось отправить предложение через Telegram Business. "
+                    "Проверьте журнал запуска бота: там записана причина ошибки."
+                ),
+            )
+        except TelegramAPIError:
+            logger.exception("Could not send the error notice through Business")
+
+
+@dp.callback_query(F.data.startswith("offer_accept:"))
+async def handle_accept(callback: CallbackQuery) -> None:
+    await callback.answer(
+        "Предложение отмечено как принятое. Это не подтверждает оплату или передачу NFT.",
+        show_alert=True,
+    )
+
+
+@dp.callback_query(F.data.startswith("offer_decline:"))
+async def handle_decline(callback: CallbackQuery) -> None:
+    if callback.message:
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except TelegramAPIError:
+            logger.exception("Could not remove offer buttons")
+    await callback.answer("Предложение отклонено.")
+
+
+async def main() -> None:
+    logger.info("Starting Telegram Business offer bot")
+    try:
+        await dp.start_polling(bot)
+    finally:
+        await bot.session.close()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+import asyncio
 import json
 import os
 import re
