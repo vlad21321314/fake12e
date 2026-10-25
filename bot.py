@@ -24,7 +24,7 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 # =========================
 # Вставь НОВЫЙ токен от @BotFather вместо PASTE_NEW_TOKEN_HERE.
 # Либо задай переменную окружения BOT_TOKEN в панели хостинга.
-BOT_TOKEN = os.getenv("BOT_TOKEN", "PASTE_NEW_TOKEN_HERE")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8642779036:AAEwpCQ-i26_YMX9mz_nuBZckL9TjWoqcug")
 
 if not BOT_TOKEN or BOT_TOKEN == "PASTE_NEW_TOKEN_HERE":
     raise RuntimeError(
