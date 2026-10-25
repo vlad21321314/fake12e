@@ -52,7 +52,7 @@ def load_config() -> dict:
                 return json.load(f)
         except Exception:
             pass
-    return {"nft_url": "https://t.me/GiftReseII"}
+    return {"nft_url": "https://t.me/@ridss_jj"}
 
 def save_config(config: dict):
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
